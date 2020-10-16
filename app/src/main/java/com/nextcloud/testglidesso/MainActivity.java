@@ -1,18 +1,21 @@
 package com.nextcloud.testglidesso;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 
-import com.bumptech.glide.Glide;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.gson.GsonBuilder;
 import com.nextcloud.android.sso.AccountImporter;
+import com.nextcloud.android.sso.aidl.NextcloudRequest;
 import com.nextcloud.android.sso.api.NextcloudAPI;
+import com.nextcloud.android.sso.api.Response;
 import com.nextcloud.android.sso.exceptions.AccountImportCancelledException;
 import com.nextcloud.android.sso.exceptions.AndroidGetAccountsPermissionNotGranted;
 import com.nextcloud.android.sso.exceptions.NextcloudFilesAppNotInstalledException;
@@ -20,9 +23,9 @@ import com.nextcloud.android.sso.helper.SingleAccountHelper;
 import com.nextcloud.android.sso.model.SingleSignOnAccount;
 import com.nextcloud.android.sso.ui.UiExceptionManager;
 
-import it.niedermann.nextcloud.sso.glide.SingleSignOnUrl;
-
 public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = MainActivity.class.getSimpleName();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,18 +54,6 @@ public class MainActivity extends AppCompatActivity {
 
         try {
             AccountImporter.onActivityResult(requestCode, resultCode, data, this, new AccountImporter.IAccountAccessGranted() {
-                NextcloudAPI.ApiConnectedListener callback = new NextcloudAPI.ApiConnectedListener() {
-                    @Override
-                    public void onConnected() {
-                        // ignore this one… see 5)
-                    }
-
-                    @Override
-                    public void onError(Exception ex) {
-                        //
-                    }
-                };
-
                 @Override
                 public void accountAccessGranted(SingleSignOnAccount account) {
                     Context l_context = getApplicationContext();
@@ -83,10 +74,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void accountAccessDone(SingleSignOnAccount account) {
-        ImageView imageView = findViewById(R.id.logo);
-        Glide.with(this.getApplicationContext())
-                .load(new SingleSignOnUrl(account, "https://delellis.com.ar/index.php/core/preview?fileId=187239&x=512&y=512&a=false&v=3168c3d339e99c870bd9d92a666526a4"))
-                .error(R.drawable.ic_baseline_error_24)
-                .into(imageView);
+        NextcloudAPI client = new NextcloudAPI(this, account, new GsonBuilder().create(), new NextcloudAPI.ApiConnectedListener() {
+            @Override
+            public void onConnected() {
+                Log.v(TAG, "SSO API successfully initialized");
+            }
+
+            @Override
+            public void onError(Exception ex) {
+                Log.e(TAG, ex.getMessage(), ex);
+            }
+        });
+
+        new Thread(() -> {
+            NextcloudRequest.Builder requestBuilder;
+            try {
+                requestBuilder = new NextcloudRequest.Builder()
+                        .setMethod("GET")
+                        .setUrl("/index.php/core/preview?fileId=71520&c=0bf5d05b8ddb80890d3835eb17f006e7&x=250&y=250&forceIcon=0");
+                NextcloudRequest nextcloudRequest = requestBuilder.build();
+                Log.v(TAG, nextcloudRequest.toString());
+                Response response = client.performNetworkRequestV2(nextcloudRequest);
+                response.getBody();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 }
